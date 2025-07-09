@@ -1,0 +1,21 @@
+{
+  "name": "daily-task-logger",
+  "version": "1.0.0",
+  "description": "A daily task logging application with Firebase backend",
+  "main": "app.js",
+  "type": "module",
+  "scripts": {
+    "build": "node build.js",
+    "deploy": "npm run build && gh-pages -d dist"
+  },
+  "devDependencies": {
+    "gh-pages": "^6.1.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "your-github-repo-url"
+  },
+  "keywords": ["task-logger", "firebase", "productivity"],
+  "author": "Your Name",
+  "license": "MIT"
+}
