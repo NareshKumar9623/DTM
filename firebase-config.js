@@ -2,17 +2,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
 import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-analytics.js";
 import { 
-    getFirestore, 
-    collection, 
-    addDoc, 
-    getDocs, 
-    doc, 
-    updateDoc, 
-    deleteDoc, 
-    query, 
-    orderBy, 
-    where,
-    onSnapshot 
+    getFirestore
 } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
 
 // Firebase configuration - uses environment variables or defaults to empty for security
