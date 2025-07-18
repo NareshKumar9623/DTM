@@ -160,8 +160,14 @@ class DailyTaskLogger {
         document.getElementById('registerForm').addEventListener('submit', (e) => this.handleRegister(e));
         
         // Google Sign-in buttons
-        document.getElementById('googleSignIn').addEventListener('click', () => this.handleGoogleSignIn());
-        document.getElementById('googleSignUpBtn').addEventListener('click', () => this.handleGoogleSignIn());
+        document.getElementById('googleSignIn').addEventListener('click', () => {
+            console.log('Google Sign-In button clicked');
+            this.handleGoogleSignIn();
+        });
+        document.getElementById('googleSignUpBtn').addEventListener('click', () => {
+            console.log('Google Sign-Up button clicked');
+            this.handleGoogleSignIn();
+        });
         
         // Form toggle buttons
         document.getElementById('showRegister').addEventListener('click', () => this.showRegisterForm());
@@ -328,17 +334,41 @@ class DailyTaskLogger {
     }
 
     async handleGoogleSignIn() {
+        console.log('Google sign-in started');
+        
         // Clear any existing messages
         this.clearMessages();
         
         try {
             this.showLoading(true);
+            console.log('Calling signInWithPopup...');
+            
             const result = await signInWithPopup(auth, googleProvider);
             const user = result.user;
-            this.showMessage(`Welcome ${user.displayName || user.email}! Signed in with Google.`, 'success');
+            
+            console.log('Google sign-in successful:', user);
+            
+            // Check if this is a mock user or real Firebase user
+            const isMockAuth = auth._isMock || user.uid.startsWith('google_');
+            const welcomeMessage = isMockAuth 
+                ? `Mock Google sign-in successful! Welcome ${user.displayName || user.email}!`
+                : `Welcome ${user.displayName || user.email}! Signed in with Google.`;
+                
+            this.showMessage(welcomeMessage, 'success');
+            
+            // Clear forms after successful login
+            document.getElementById('loginForm').reset();
+            document.getElementById('registerForm').reset();
+            
         } catch (error) {
             console.error('Google sign-in error:', error);
             let errorMessage = 'Google sign-in failed. Please try again.';
+            
+            // Don't show errors for mock authentication that actually succeeded
+            if (auth._isMock && this.currentUser) {
+                console.log('Mock Google auth succeeded despite error');
+                return;
+            }
             
             switch (error.code) {
                 case 'auth/popup-closed-by-user':
@@ -357,12 +387,6 @@ class DailyTaskLogger {
                     errorMessage = 'Internal error occurred. Please try again later.';
                     break;
                 default:
-                    // Check if it's our mock implementation
-                    if (error.message && error.message.includes('Mock')) {
-                        // Don't show error for mock - just show success
-                        this.showMessage('Mock Google sign-in successful!', 'success');
-                        return;
-                    }
                     break;
             }
             

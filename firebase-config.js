@@ -79,7 +79,20 @@ function createMockAuth() {
         _isMock: true,
         _currentUser: null,
         _authStateListeners: new Set(),
-        currentUser: null
+        currentUser: null,
+        
+        // Add a method to trigger auth state change
+        _triggerAuthStateChange: function(user) {
+            this._currentUser = user;
+            this.currentUser = user;
+            this._authStateListeners.forEach(listener => {
+                try {
+                    listener(user);
+                } catch (error) {
+                    console.error('Error in auth state listener:', error);
+                }
+            });
+        }
     };
 }
 
@@ -320,6 +333,9 @@ const signInWithEmailAndPasswordMock = async function(auth, email, password) {
         return signInWithEmailAndPassword(auth, email, password);
     }
     
+    // Simulate some delay for realistic experience
+    await new Promise(resolve => setTimeout(resolve, 300));
+    
     // Mock implementation - check against users collection
     const usersPath = 'users';
     const mockCollection = db._mockData.get(usersPath) || new Map();
@@ -330,13 +346,25 @@ const signInWithEmailAndPasswordMock = async function(auth, email, password) {
                 uid: userId,
                 email: email,
                 displayName: userData.fullName || userData.username,
-                providerData: [{ providerId: 'password' }]
+                providerData: [{ providerId: 'password' }],
+                emailVerified: true
             };
+            
             auth._currentUser = user;
             auth.currentUser = user;
             
+            console.log('Mock: Email sign-in successful for', email);
+            
             // Notify auth state listeners
-            auth._authStateListeners.forEach(listener => listener(user));
+            setTimeout(() => {
+                auth._authStateListeners.forEach(listener => {
+                    try {
+                        listener(user);
+                    } catch (error) {
+                        console.error('Error in auth state listener:', error);
+                    }
+                });
+            }, 100);
             
             return { user };
         }
@@ -350,13 +378,18 @@ const signInWithPopupMock = async function(auth, provider) {
         return signInWithPopup(auth, provider);
     }
     
-    // Mock Google sign-in
+    // Simulate some delay for realistic experience
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Mock Google sign-in - generate more realistic user data
+    const timestamp = Date.now();
     const user = {
-        uid: 'google_' + Date.now(),
-        email: 'user@gmail.com',
-        displayName: 'Google User',
-        photoURL: 'https://via.placeholder.com/100',
-        providerData: [{ providerId: 'google.com' }]
+        uid: 'google_' + timestamp,
+        email: `user${timestamp}@gmail.com`,
+        displayName: 'Demo Google User',
+        photoURL: 'https://lh3.googleusercontent.com/a/default-user=s96-c',
+        providerData: [{ providerId: 'google.com' }],
+        emailVerified: true
     };
     
     auth._currentUser = user;
@@ -368,19 +401,30 @@ const signInWithPopupMock = async function(auth, provider) {
         db._mockData.set(usersPath, new Map());
     }
     
-    const collection = db._mockData.get(usersPath);
-    collection.set(user.uid, {
+    const usersCollection = db._mockData.get(usersPath);
+    usersCollection.set(user.uid, {
         id: user.uid,
         email: user.email,
         username: user.displayName.replace(/\s+/g, '').toLowerCase(),
         fullName: user.displayName,
         photoURL: user.photoURL,
         provider: 'google',
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        lastLogin: new Date().toISOString()
     });
     
+    console.log('Mock: Google sign-in successful for', user.email);
+    
     // Notify auth state listeners
-    auth._authStateListeners.forEach(listener => listener(user));
+    setTimeout(() => {
+        auth._authStateListeners.forEach(listener => {
+            try {
+                listener(user);
+            } catch (error) {
+                console.error('Error in auth state listener:', error);
+            }
+        });
+    }, 100);
     
     return { user };
 };
@@ -390,36 +434,63 @@ const createUserWithEmailAndPasswordMock = async function(auth, email, password)
         return createUserWithEmailAndPassword(auth, email, password);
     }
     
+    // Simulate some delay for realistic experience
+    await new Promise(resolve => setTimeout(resolve, 400));
+    
+    // Check if user already exists
+    const usersPath = 'users';
+    if (!db._mockData.has(usersPath)) {
+        db._mockData.set(usersPath, new Map());
+    }
+    
+    const usersCollection = db._mockData.get(usersPath);
+    
+    // Check for existing email
+    for (const [userId, userData] of usersCollection) {
+        if (userData.email === email) {
+            const error = new Error('The email address is already in use by another account.');
+            error.code = 'auth/email-already-in-use';
+            throw error;
+        }
+    }
+    
     // Mock implementation
     const userId = 'user_' + Date.now();
     const user = {
         uid: userId,
         email: email,
         displayName: email.split('@')[0],
-        providerData: [{ providerId: 'password' }]
+        providerData: [{ providerId: 'password' }],
+        emailVerified: false
     };
     
     auth._currentUser = user;
     auth.currentUser = user;
     
     // Store user in users collection
-    const usersPath = 'users';
-    if (!db._mockData.has(usersPath)) {
-        db._mockData.set(usersPath, new Map());
-    }
-    
-    const collection = db._mockData.get(usersPath);
-    collection.set(userId, {
+    usersCollection.set(userId, {
         id: userId,
         email: email,
+        password: password, // In real app, this would be hashed
         username: email.split('@')[0],
         fullName: user.displayName,
         provider: 'email',
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        lastLogin: new Date().toISOString()
     });
     
+    console.log('Mock: User registration successful for', email);
+    
     // Notify auth state listeners
-    auth._authStateListeners.forEach(listener => listener(user));
+    setTimeout(() => {
+        auth._authStateListeners.forEach(listener => {
+            try {
+                listener(user);
+            } catch (error) {
+                console.error('Error in auth state listener:', error);
+            }
+        });
+    }, 100);
     
     return { user };
 };
@@ -429,11 +500,28 @@ const signOutMock = async function(auth) {
         return signOut(auth);
     }
     
+    // Simulate some delay for realistic experience
+    await new Promise(resolve => setTimeout(resolve, 200));
+    
+    const wasLoggedIn = !!auth._currentUser;
+    
     auth._currentUser = null;
     auth.currentUser = null;
     
+    if (wasLoggedIn) {
+        console.log('Mock: User signed out successfully');
+    }
+    
     // Notify auth state listeners
-    auth._authStateListeners.forEach(listener => listener(null));
+    setTimeout(() => {
+        auth._authStateListeners.forEach(listener => {
+            try {
+                listener(null);
+            } catch (error) {
+                console.error('Error in auth state listener:', error);
+            }
+        });
+    }, 50);
 };
 
 const onAuthStateChangedMock = function(auth, callback) {
