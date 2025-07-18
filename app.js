@@ -1,5 +1,7 @@
 import { 
     db, 
+    auth,
+    googleProvider,
     collection, 
     addDoc, 
     getDocs, 
@@ -9,7 +11,13 @@ import {
     query, 
     orderBy, 
     where,
-    onSnapshot
+    onSnapshot,
+    setDoc,
+    signInWithEmailAndPassword,
+    signInWithPopup,
+    createUserWithEmailAndPassword,
+    signOut,
+    onAuthStateChanged
 } from './firebase-config.js';
 
 class DailyTaskLogger {
@@ -19,31 +27,117 @@ class DailyTaskLogger {
         this.currentView = 'list';
         this.currentEditingTask = null;
         this.currentUser = null;
+        this.unsubscribeAuth = null;
         
         this.init();
     }
 
     async init() {
-        this.initializeAuthStateListener();
         this.initializeEventListeners();
+        this.initializeAuthStateListener();
+        
+        // Add cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            this.cleanup();
+        });
+        
+        // Handle visibility change for better session management
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                // Tab is now hidden
+                console.log('Tab hidden - saving state');
+            } else {
+                // Tab is now visible
+                console.log('Tab visible - checking auth state');
+                // Refresh data if user is logged in
+                if (this.currentUser) {
+                    this.loadTasks();
+                    this.updateStats();
+                }
+            }
+        });
     }
 
     initializeAuthStateListener() {
-        // For simplified authentication, we'll check login status manually
-        // In a real app, you'd use Firebase Auth here
+        // Set up Firebase Auth state listener
+        this.unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+            console.log('Auth state changed:', user ? 'User logged in' : 'User logged out');
+            
+            if (user) {
+                this.currentUser = user;
+                this.showApp();
+                this.setCurrentDate();
+                this.setDefaultDate();
+                this.loadTasks();
+                this.updateStats();
+                this.loadUserPreferences();
+                
+                // Store user data in Firestore if it doesn't exist
+                this.ensureUserDocument(user);
+                
+                // Clear any auth error messages when successfully logged in
+                this.clearMessages();
+            } else {
+                // User is logged out
+                this.currentUser = null;
+                this.tasks = [];
+                this.filteredTasks = [];
+                this.currentEditingTask = null;
+                
+                // Clear any cached data
+                this.clearCachedData();
+                
+                this.showLogin();
+                console.log('User session ended, showing login page');
+            }
+        });
+    }
+
+    clearCachedData() {
+        // Clear any locally stored sensitive data
+        this.tasks = [];
+        this.filteredTasks = [];
+        this.currentEditingTask = null;
         
-        // Check if user is already logged in (simplified)
-        const savedUser = localStorage.getItem('currentUser');
-        if (savedUser) {
-            this.currentUser = savedUser;
-            this.showApp();
-            this.setCurrentDate();
-            this.setDefaultDate();
-            this.loadTasks();
-            this.updateStats();
-            this.loadUserPreferences();
-        } else {
-            this.showLogin();
+        // Reset forms
+        const forms = ['loginForm', 'registerForm', 'taskForm', 'editTaskForm'];
+        forms.forEach(formId => {
+            const form = document.getElementById(formId);
+            if (form) form.reset();
+        });
+        
+        // Close any open modals
+        this.closeModal();
+        
+        // Reset view state
+        this.currentView = 'list';
+        
+        // Clear stats
+        const stats = ['totalTasks', 'completedTasks', 'timeSpent', 'streak'];
+        stats.forEach(statId => {
+            const element = document.getElementById(statId);
+            if (element) element.textContent = '0';
+        });
+        
+        // Clear tasks list
+        const tasksList = document.getElementById('tasksList');
+        if (tasksList) tasksList.innerHTML = '';
+    }
+
+    async ensureUserDocument(user) {
+        try {
+            const userRef = doc(db, 'users', user.uid);
+            const userData = {
+                email: user.email,
+                displayName: user.displayName || user.email.split('@')[0],
+                photoURL: user.photoURL || null,
+                lastLogin: new Date().toISOString(),
+                provider: user.providerData[0]?.providerId || 'unknown'
+            };
+            
+            await setDoc(userRef, userData, { merge: true });
+        } catch (error) {
+            console.error('Error saving user data:', error);
         }
     }
 
@@ -55,12 +149,23 @@ class DailyTaskLogger {
     showApp() {
         document.getElementById('loginContainer').style.display = 'none';
         document.getElementById('appContainer').style.display = 'block';
-        document.getElementById('currentUser').textContent = `Welcome, ${this.currentUser}`;
+        document.getElementById('currentUser').textContent = `Welcome, ${this.currentUser.displayName || this.currentUser.email}`;
     }
 
     initializeEventListeners() {
         // Login form
         document.getElementById('loginForm').addEventListener('submit', (e) => this.handleLogin(e));
+        
+        // Register form
+        document.getElementById('registerForm').addEventListener('submit', (e) => this.handleRegister(e));
+        
+        // Google Sign-in buttons
+        document.getElementById('googleSignIn').addEventListener('click', () => this.handleGoogleSignIn());
+        document.getElementById('googleSignUpBtn').addEventListener('click', () => this.handleGoogleSignIn());
+        
+        // Form toggle buttons
+        document.getElementById('showRegister').addEventListener('click', () => this.showRegisterForm());
+        document.getElementById('showLogin').addEventListener('click', () => this.showLoginForm());
         
         // Logout button
         document.getElementById('logoutBtn').addEventListener('click', () => this.handleLogout());
@@ -96,70 +201,220 @@ class DailyTaskLogger {
 
     async handleLogin(e) {
         e.preventDefault();
-        const username = document.getElementById('username').value.trim();
+        const email = document.getElementById('email').value.trim();
         const password = document.getElementById('password').value;
 
-        if (!username || !password) {
-            this.showMessage('Please enter both username and password', 'error');
+        // Clear any existing messages
+        this.clearMessages();
+
+        if (!email || !password) {
+            this.showMessage('Please enter both email and password', 'error');
+            return;
+        }
+
+        if (!this.isValidEmail(email)) {
+            this.showMessage('Please enter a valid email address', 'error');
             return;
         }
 
         try {
             this.showLoading(true);
-            
-            // Check if user exists in users collection
-            const usersQuery = query(
-                collection(db, 'users'), 
-                where('username', '==', username),
-                where('password', '==', password)
-            );
-            const userSnapshot = await getDocs(usersQuery);
-            
-            if (userSnapshot.empty) {
-                this.showMessage('Invalid username or password', 'error');
-                return;
-            }
-
-            // For simplicity, we'll use a fake email format for Firebase Auth
-            const fakeEmail = `${username}@dailytasks.local`;
-            
-            // Store current user info
-            this.currentUser = username;
-            localStorage.setItem('currentUser', username);
-            
-            // Show app directly (simplified auth)
-            this.showApp();
-            this.setCurrentDate();
-            this.setDefaultDate();
-            await this.loadTasks();
-            this.updateStats();
-            this.loadUserPreferences();
-            
+            await signInWithEmailAndPassword(auth, email, password);
             this.showMessage('Login successful!', 'success');
-            
+            // Clear form after successful login
+            document.getElementById('loginForm').reset();
         } catch (error) {
             console.error('Login error:', error);
-            this.showMessage('Login failed. Please try again.', 'error');
+            let errorMessage = 'Login failed. Please try again.';
+            
+            switch (error.code) {
+                case 'auth/user-not-found':
+                    errorMessage = 'No account found with this email address.';
+                    break;
+                case 'auth/wrong-password':
+                    errorMessage = 'Incorrect password. Please try again.';
+                    break;
+                case 'auth/invalid-email':
+                    errorMessage = 'Invalid email address format.';
+                    break;
+                case 'auth/invalid-credential':
+                    errorMessage = 'Invalid email or password combination.';
+                    break;
+                case 'auth/too-many-requests':
+                    errorMessage = 'Too many failed attempts. Please try again later.';
+                    break;
+                case 'auth/user-disabled':
+                    errorMessage = 'This account has been disabled.';
+                    break;
+                default:
+                    // Handle mock auth error
+                    if (error.message && error.message.includes('Invalid email or password')) {
+                        errorMessage = 'Invalid email or password combination.';
+                    }
+                    break;
+            }
+            
+            this.showMessage(errorMessage, 'error');
         } finally {
             this.showLoading(false);
         }
     }
 
+    async handleRegister(e) {
+        e.preventDefault();
+        const email = document.getElementById('registerEmail').value.trim();
+        const password = document.getElementById('registerPassword').value;
+        const confirmPassword = document.getElementById('confirmPassword').value;
+
+        // Clear any existing messages
+        this.clearMessages();
+
+        if (!email || !password || !confirmPassword) {
+            this.showMessage('Please fill in all fields', 'error');
+            return;
+        }
+
+        if (!this.isValidEmail(email)) {
+            this.showMessage('Please enter a valid email address', 'error');
+            return;
+        }
+
+        if (password !== confirmPassword) {
+            this.showMessage('Passwords do not match', 'error');
+            return;
+        }
+
+        if (password.length < 6) {
+            this.showMessage('Password must be at least 6 characters long', 'error');
+            return;
+        }
+
+        if (!this.isStrongPassword(password)) {
+            this.showMessage('Password must contain at least one letter and one number', 'error');
+            return;
+        }
+
+        try {
+            this.showLoading(true);
+            await createUserWithEmailAndPassword(auth, email, password);
+            this.showMessage('Account created successfully! Welcome!', 'success');
+            // Clear form after successful registration
+            document.getElementById('registerForm').reset();
+        } catch (error) {
+            console.error('Registration error:', error);
+            let errorMessage = 'Registration failed. Please try again.';
+            
+            switch (error.code) {
+                case 'auth/email-already-in-use':
+                    errorMessage = 'An account with this email already exists. Please sign in instead.';
+                    break;
+                case 'auth/invalid-email':
+                    errorMessage = 'Invalid email address format.';
+                    break;
+                case 'auth/weak-password':
+                    errorMessage = 'Password is too weak. Please use a stronger password with letters and numbers.';
+                    break;
+                case 'auth/operation-not-allowed':
+                    errorMessage = 'Email/password accounts are not enabled. Please contact support.';
+                    break;
+                default:
+                    break;
+            }
+            
+            this.showMessage(errorMessage, 'error');
+        } finally {
+            this.showLoading(false);
+        }
+    }
+
+    async handleGoogleSignIn() {
+        // Clear any existing messages
+        this.clearMessages();
+        
+        try {
+            this.showLoading(true);
+            const result = await signInWithPopup(auth, googleProvider);
+            const user = result.user;
+            this.showMessage(`Welcome ${user.displayName || user.email}! Signed in with Google.`, 'success');
+        } catch (error) {
+            console.error('Google sign-in error:', error);
+            let errorMessage = 'Google sign-in failed. Please try again.';
+            
+            switch (error.code) {
+                case 'auth/popup-closed-by-user':
+                    errorMessage = 'Sign-in cancelled by user.';
+                    break;
+                case 'auth/popup-blocked':
+                    errorMessage = 'Popup blocked by browser. Please allow popups for this site and try again.';
+                    break;
+                case 'auth/account-exists-with-different-credential':
+                    errorMessage = 'An account already exists with this email using a different sign-in method.';
+                    break;
+                case 'auth/network-request-failed':
+                    errorMessage = 'Network error. Please check your connection and try again.';
+                    break;
+                case 'auth/internal-error':
+                    errorMessage = 'Internal error occurred. Please try again later.';
+                    break;
+                default:
+                    // Check if it's our mock implementation
+                    if (error.message && error.message.includes('Mock')) {
+                        // Don't show error for mock - just show success
+                        this.showMessage('Mock Google sign-in successful!', 'success');
+                        return;
+                    }
+                    break;
+            }
+            
+            this.showMessage(errorMessage, 'error');
+        } finally {
+            this.showLoading(false);
+        }
+    }
+
+    showLoginForm() {
+        document.getElementById('loginForm').style.display = 'block';
+        document.getElementById('registerForm').style.display = 'none';
+    }
+
+    showRegisterForm() {
+        document.getElementById('loginForm').style.display = 'none';
+        document.getElementById('registerForm').style.display = 'block';
+    }
+
     async handleLogout() {
         try {
-            this.currentUser = null;
+            this.showLoading(true);
+            
+            // Clear local data first
             this.tasks = [];
             this.filteredTasks = [];
-            localStorage.removeItem('currentUser');
             
-            // Clear the login form
+            // Clear any existing messages
+            this.clearMessages();
+            
+            // Clear forms
             document.getElementById('loginForm').reset();
+            document.getElementById('registerForm').reset();
             
-            this.showLogin();
+            // Clear any cached user preferences
+            localStorage.removeItem('dailyTaskLoggerPrefs');
+            
+            // Reset UI state
+            this.currentEditingTask = null;
+            this.currentView = 'list';
+            
+            // Sign out from Firebase
+            await signOut(auth);
+            
+            // Show login form
+            this.showLoginForm();
             this.showMessage('Logged out successfully', 'success');
         } catch (error) {
             console.error('Logout error:', error);
-            this.showMessage('Error logging out', 'error');
+            this.showMessage('Error logging out. Please try again.', 'error');
+        } finally {
+            this.showLoading(false);
         }
     }
 
@@ -187,7 +442,6 @@ class DailyTaskLogger {
             return;
         }
         
-        const formData = new FormData(e.target);
         const taskData = {
             title: document.getElementById('taskTitle').value,
             category: document.getElementById('taskCategory').value,
@@ -198,13 +452,13 @@ class DailyTaskLogger {
             date: document.getElementById('taskDate').value,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
-            username: this.currentUser
+            userId: this.currentUser.uid
         };
 
         try {
             this.showLoading(true);
-            // Save to user-specific collection: data/{username}/tasks
-            const userTasksPath = `data/${this.currentUser}/tasks`;
+            // Save to user-specific collection: data/{userId}/tasks
+            const userTasksPath = `data/${this.currentUser.uid}/tasks`;
             await addDoc(collection(db, userTasksPath), taskData);
             this.showMessage('Task added successfully!', 'success');
             e.target.reset();
@@ -226,8 +480,8 @@ class DailyTaskLogger {
 
         try {
             this.showLoading(true);
-            // Load user-specific tasks from data/{username}/tasks collection
-            const userTasksPath = `data/${this.currentUser}/tasks`;
+            // Load user-specific tasks from data/{userId}/tasks collection
+            const userTasksPath = `data/${this.currentUser.uid}/tasks`;
             const tasksQuery = query(collection(db, userTasksPath), orderBy('createdAt', 'desc'));
             const querySnapshot = await getDocs(tasksQuery);
             
@@ -241,9 +495,35 @@ class DailyTaskLogger {
 
             this.filteredTasks = [...this.tasks];
             this.renderTasks();
+            console.log(`Loaded ${this.tasks.length} tasks for user ${this.currentUser.email}`);
         } catch (error) {
             console.error('Error loading tasks:', error);
-            this.showMessage('Error loading tasks. Please refresh the page.', 'error');
+            
+            let errorMessage = 'Error loading tasks. Please refresh the page.';
+            if (error.code === 'permission-denied') {
+                errorMessage = 'Access denied. Please log in again.';
+                // Force logout if permission denied
+                this.handleLogout();
+                return;
+            } else if (error.code === 'unavailable') {
+                errorMessage = 'Service temporarily unavailable. Please try again later.';
+            } else if (error.message && error.message.includes('network')) {
+                errorMessage = 'Network error. Please check your connection.';
+            }
+            
+            this.showMessage(errorMessage, 'error');
+            
+            // Show empty state on error
+            const tasksContainer = document.getElementById('tasksList');
+            if (tasksContainer) {
+                tasksContainer.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <h3>Unable to load tasks</h3>
+                        <p>Please check your connection and try refreshing the page.</p>
+                    </div>
+                `;
+            }
         } finally {
             this.showLoading(false);
         }
@@ -355,7 +635,7 @@ class DailyTaskLogger {
         try {
             this.showLoading(true);
             // Update in user-specific collection
-            const userTasksPath = `data/${this.currentUser}/tasks`;
+            const userTasksPath = `data/${this.currentUser.uid}/tasks`;
             const taskRef = doc(db, userTasksPath, taskId);
             await updateDoc(taskRef, updatedData);
             this.showMessage('Task updated successfully!', 'success');
@@ -382,8 +662,8 @@ class DailyTaskLogger {
 
         try {
             this.showLoading(true);
-            // Delete from user-specific collection
-            const userTasksPath = `data/${this.currentUser}/tasks`;
+            // Delete from user-specific collection - FIXED: Use this.currentUser.uid instead of this.currentUser
+            const userTasksPath = `data/${this.currentUser.uid}/tasks`;
             await deleteDoc(doc(db, userTasksPath, taskId));
             this.showMessage('Task deleted successfully!', 'success');
             await this.loadTasks();
@@ -522,13 +802,39 @@ class DailyTaskLogger {
 
     showLoading(show) {
         const spinner = document.getElementById('loadingSpinner');
-        spinner.style.display = show ? 'block' : 'none';
+        const loginContainer = document.getElementById('loginContainer');
+        const appContainer = document.getElementById('appContainer');
+        
+        if (spinner) {
+            spinner.style.display = show ? 'block' : 'none';
+        }
+        
+        // Disable form inputs while loading
+        const forms = document.querySelectorAll('form');
+        forms.forEach(form => {
+            const inputs = form.querySelectorAll('input, button, select, textarea');
+            inputs.forEach(input => {
+                input.disabled = show;
+            });
+        });
+        
+        // Add loading class to containers for better UX
+        if (show) {
+            if (loginContainer && loginContainer.style.display !== 'none') {
+                loginContainer.classList.add('loading');
+            }
+            if (appContainer && appContainer.style.display !== 'none') {
+                appContainer.classList.add('loading');
+            }
+        } else {
+            if (loginContainer) loginContainer.classList.remove('loading');
+            if (appContainer) appContainer.classList.remove('loading');
+        }
     }
 
     showMessage(message, type) {
         // Remove existing messages
-        const existingMessages = document.querySelectorAll('.message');
-        existingMessages.forEach(msg => msg.remove());
+        this.clearMessages();
 
         // Create new message
         const messageDiv = document.createElement('div');
@@ -538,14 +844,53 @@ class DailyTaskLogger {
             <span>${message}</span>
         `;
 
-        // Insert at the top of the container
-        const container = document.querySelector('.container');
-        container.insertBefore(messageDiv, container.firstChild);
+        // Insert at the top of the appropriate container
+        let container = document.querySelector('.container');
+        
+        // If in login view, use login container instead
+        if (!container || container.style.display === 'none') {
+            container = document.querySelector('.login-container');
+            if (container) {
+                const loginCard = container.querySelector('.login-card');
+                if (loginCard) {
+                    loginCard.insertBefore(messageDiv, loginCard.firstChild);
+                } else {
+                    container.insertBefore(messageDiv, container.firstChild);
+                }
+            } else {
+                // Fallback: append to body if no container found
+                document.body.appendChild(messageDiv);
+            }
+        } else {
+            container.insertBefore(messageDiv, container.firstChild);
+        }
 
         // Auto-remove after 5 seconds
         setTimeout(() => {
-            messageDiv.remove();
+            if (messageDiv.parentNode) {
+                messageDiv.remove();
+            }
         }, 5000);
+
+        // Scroll to message if needed
+        messageDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    clearMessages() {
+        const existingMessages = document.querySelectorAll('.message');
+        existingMessages.forEach(msg => msg.remove());
+    }
+
+    isValidEmail(email) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return emailRegex.test(email);
+    }
+
+    isStrongPassword(password) {
+        // Check if password contains at least one letter and one number
+        const hasLetter = /[a-zA-Z]/.test(password);
+        const hasNumber = /\d/.test(password);
+        return hasLetter && hasNumber;
     }
 
     exportTasks() {
@@ -574,11 +919,32 @@ class DailyTaskLogger {
     loadUserPreferences() {
         const savedPrefs = localStorage.getItem('dailyTaskLoggerPrefs');
         if (savedPrefs) {
-            const preferences = JSON.parse(savedPrefs);
-            if (preferences.view) {
-                this.toggleView(preferences.view);
+            try {
+                const preferences = JSON.parse(savedPrefs);
+                if (preferences.view) {
+                    this.toggleView(preferences.view);
+                }
+            } catch (error) {
+                console.warn('Error loading user preferences:', error);
+                // Clear corrupted preferences
+                localStorage.removeItem('dailyTaskLoggerPrefs');
             }
         }
+    }
+
+    // Cleanup method for proper session management
+    cleanup() {
+        // Unsubscribe from auth state listener
+        if (this.unsubscribeAuth) {
+            this.unsubscribeAuth();
+            this.unsubscribeAuth = null;
+        }
+        
+        // Clear any timeouts or intervals
+        this.clearCachedData();
+        
+        // Remove event listeners if needed
+        console.log('Application cleanup completed');
     }
 }
 

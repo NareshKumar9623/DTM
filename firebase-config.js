@@ -2,6 +2,15 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
 import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-analytics.js";
 import { 
+    getAuth,
+    signInWithEmailAndPassword,
+    signInWithPopup,
+    GoogleAuthProvider,
+    createUserWithEmailAndPassword,
+    signOut,
+    onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js";
+import { 
     getFirestore,
     collection as firebaseCollection,
     addDoc as firebaseAddDoc,
@@ -12,7 +21,8 @@ import {
     query as firebaseQuery,
     orderBy as firebaseOrderBy,
     where as firebaseWhere,
-    onSnapshot as firebaseOnSnapshot
+    onSnapshot as firebaseOnSnapshot,
+    setDoc as firebaseSetDoc
 } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
 
 // Firebase configuration - uses environment variables or defaults to empty for security
@@ -27,7 +37,7 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-let db, analytics;
+let db, analytics, auth, googleProvider;
 
 // Check if we have valid Firebase config
 const hasValidConfig = firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.appId;
@@ -37,17 +47,21 @@ if (hasValidConfig) {
         // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         db = getFirestore(app);
+        auth = getAuth(app);
+        googleProvider = new GoogleAuthProvider();
         analytics = getAnalytics(app);
         console.log('Firebase initialized successfully');
     } catch (error) {
         console.error('Firebase initialization failed:', error);
         // Fall back to mock database
         db = createMockDatabase();
+        auth = createMockAuth();
     }
 } else {
     // Create mock database for development since Firebase config is not real
     console.log('Using mock database for development');
     db = createMockDatabase();
+    auth = createMockAuth();
 }
 
 function createMockDatabase() {
@@ -57,6 +71,15 @@ function createMockDatabase() {
         _getNextId: function() {
             return 'mock_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
         }
+    };
+}
+
+function createMockAuth() {
+    return {
+        _isMock: true,
+        _currentUser: null,
+        _authStateListeners: new Set(),
+        currentUser: null
     };
 }
 
@@ -272,6 +295,163 @@ const onSnapshot = function(queryRef, callback) {
     return function() {}; // Unsubscribe function
 };
 
+const setDoc = async function(docRef, data) {
+    // If not mock, use real Firebase
+    if (!db._isMock) {
+        return firebaseSetDoc(docRef, data);
+    }
+    
+    // Mock implementation
+    const collectionPath = docRef._path;
+    const docId = docRef._id;
+    
+    if (!db._mockData.has(collectionPath)) {
+        db._mockData.set(collectionPath, new Map());
+    }
+    
+    const collection = db._mockData.get(collectionPath);
+    collection.set(docId, { id: docId, ...data });
+    console.log('Mock: Set document', docId, 'in', collectionPath);
+};
+
+// Firebase Auth functions
+const signInWithEmailAndPasswordMock = async function(auth, email, password) {
+    if (!auth._isMock) {
+        return signInWithEmailAndPassword(auth, email, password);
+    }
+    
+    // Mock implementation - check against users collection
+    const usersPath = 'users';
+    const mockCollection = db._mockData.get(usersPath) || new Map();
+    
+    for (const [userId, userData] of mockCollection) {
+        if (userData.email === email && userData.password === password) {
+            const user = {
+                uid: userId,
+                email: email,
+                displayName: userData.fullName || userData.username,
+                providerData: [{ providerId: 'password' }]
+            };
+            auth._currentUser = user;
+            auth.currentUser = user;
+            
+            // Notify auth state listeners
+            auth._authStateListeners.forEach(listener => listener(user));
+            
+            return { user };
+        }
+    }
+    
+    throw new Error('Invalid email or password');
+};
+
+const signInWithPopupMock = async function(auth, provider) {
+    if (!auth._isMock) {
+        return signInWithPopup(auth, provider);
+    }
+    
+    // Mock Google sign-in
+    const user = {
+        uid: 'google_' + Date.now(),
+        email: 'user@gmail.com',
+        displayName: 'Google User',
+        photoURL: 'https://via.placeholder.com/100',
+        providerData: [{ providerId: 'google.com' }]
+    };
+    
+    auth._currentUser = user;
+    auth.currentUser = user;
+    
+    // Store user in users collection
+    const usersPath = 'users';
+    if (!db._mockData.has(usersPath)) {
+        db._mockData.set(usersPath, new Map());
+    }
+    
+    const collection = db._mockData.get(usersPath);
+    collection.set(user.uid, {
+        id: user.uid,
+        email: user.email,
+        username: user.displayName.replace(/\s+/g, '').toLowerCase(),
+        fullName: user.displayName,
+        photoURL: user.photoURL,
+        provider: 'google',
+        createdAt: new Date().toISOString()
+    });
+    
+    // Notify auth state listeners
+    auth._authStateListeners.forEach(listener => listener(user));
+    
+    return { user };
+};
+
+const createUserWithEmailAndPasswordMock = async function(auth, email, password) {
+    if (!auth._isMock) {
+        return createUserWithEmailAndPassword(auth, email, password);
+    }
+    
+    // Mock implementation
+    const userId = 'user_' + Date.now();
+    const user = {
+        uid: userId,
+        email: email,
+        displayName: email.split('@')[0],
+        providerData: [{ providerId: 'password' }]
+    };
+    
+    auth._currentUser = user;
+    auth.currentUser = user;
+    
+    // Store user in users collection
+    const usersPath = 'users';
+    if (!db._mockData.has(usersPath)) {
+        db._mockData.set(usersPath, new Map());
+    }
+    
+    const collection = db._mockData.get(usersPath);
+    collection.set(userId, {
+        id: userId,
+        email: email,
+        username: email.split('@')[0],
+        fullName: user.displayName,
+        provider: 'email',
+        createdAt: new Date().toISOString()
+    });
+    
+    // Notify auth state listeners
+    auth._authStateListeners.forEach(listener => listener(user));
+    
+    return { user };
+};
+
+const signOutMock = async function(auth) {
+    if (!auth._isMock) {
+        return signOut(auth);
+    }
+    
+    auth._currentUser = null;
+    auth.currentUser = null;
+    
+    // Notify auth state listeners
+    auth._authStateListeners.forEach(listener => listener(null));
+};
+
+const onAuthStateChangedMock = function(auth, callback) {
+    if (!auth._isMock) {
+        return onAuthStateChanged(auth, callback);
+    }
+    
+    auth._authStateListeners.add(callback);
+    
+    // Call immediately with current state
+    setTimeout(() => callback(auth._currentUser), 0);
+    
+    // Return unsubscribe function
+    return () => {
+        auth._authStateListeners.delete(callback);
+    };
+};
+
 // Initialize sample data for testing
 const initSampleData = () => {
     // Add sample users
@@ -284,27 +464,30 @@ const initSampleData = () => {
     users.set('user1', {
         id: 'user1',
         username: 'naresh',
-        password: 'password123',
         email: 'naresh@example.com',
+        password: 'password123',
         fullName: 'Naresh Kumar',
+        provider: 'email',
         createdAt: new Date().toISOString()
     });
     
     users.set('user2', {
         id: 'user2',
         username: 'admin',
-        password: 'admin123',
         email: 'admin@example.com',
+        password: 'admin123',
         fullName: 'Administrator',
+        provider: 'email',
         createdAt: new Date().toISOString()
     });
     
     users.set('user3', {
         id: 'user3',
         username: 'demo',
-        password: 'demo123',
         email: 'demo@example.com',
+        password: 'demo123',
         fullName: 'Demo User',
+        provider: 'email',
         createdAt: new Date().toISOString()
     });
     
@@ -371,6 +554,8 @@ if (db._isMock) {
 // Export the initialized services
 export { 
     db, 
+    auth,
+    googleProvider,
     analytics, 
     collection, 
     addDoc, 
@@ -381,5 +566,11 @@ export {
     query, 
     orderBy, 
     where, 
-    onSnapshot
+    onSnapshot,
+    setDoc,
+    signInWithEmailAndPasswordMock as signInWithEmailAndPassword,
+    signInWithPopupMock as signInWithPopup,
+    createUserWithEmailAndPasswordMock as createUserWithEmailAndPassword,
+    signOutMock as signOut,
+    onAuthStateChangedMock as onAuthStateChanged
 };

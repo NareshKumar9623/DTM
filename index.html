@@ -17,8 +17,8 @@
             </div>
             <form id="loginForm" class="login-form">
                 <div class="form-group">
-                    <label for="username">Username</label>
-                    <input type="text" id="username" placeholder="Enter your username" required>
+                    <label for="email">Email</label>
+                    <input type="email" id="email" placeholder="Enter your email" required>
                 </div>
                 <div class="form-group">
                     <label for="password">Password</label>
@@ -27,9 +27,55 @@
                 <button type="submit" class="btn btn-primary">
                     <i class="fas fa-sign-in-alt"></i> Sign In
                 </button>
+                
+                <div class="auth-separator">
+                    <span>or</span>
+                </div>
+                
+                <button type="button" id="googleSignIn" class="btn btn-google">
+                    <i class="fab fa-google"></i> Sign in with Google
+                </button>
+                
+                <div class="auth-links">
+                    <button type="button" id="showRegister" class="btn btn-link">
+                        Don't have an account? Sign up
+                    </button>
+                </div>
+            </form>
+            
+            <form id="registerForm" class="login-form" style="display: none;">
+                <div class="form-group">
+                    <label for="registerEmail">Email</label>
+                    <input type="email" id="registerEmail" placeholder="Enter your email" required>
+                </div>
+                <div class="form-group">
+                    <label for="registerPassword">Password</label>
+                    <input type="password" id="registerPassword" placeholder="Create a password" required>
+                </div>
+                <div class="form-group">
+                    <label for="confirmPassword">Confirm Password</label>
+                    <input type="password" id="confirmPassword" placeholder="Confirm your password" required>
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-user-plus"></i> Sign Up
+                </button>
+                
+                <div class="auth-separator">
+                    <span>or</span>
+                </div>
+                
+                <button type="button" id="googleSignUpBtn" class="btn btn-google">
+                    <i class="fab fa-google"></i> Sign up with Google
+                </button>
+                
+                <div class="auth-links">
+                    <button type="button" id="showLogin" class="btn btn-link">
+                        Already have an account? Sign in
+                    </button>
+                </div>
             </form>
             <div class="login-footer">
-                <p>Don't have an account? Contact admin for registration.</p>
+                <p>Secure authentication powered by Firebase</p>
             </div>
         </div>
     </div>
