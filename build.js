@@ -4,6 +4,34 @@ import path from 'path';
 async function build() {
     console.log('Building for production...');
     
+    // Check environment variables
+    const envVars = [
+        'FIREBASE_API_KEY',
+        'FIREBASE_AUTH_DOMAIN', 
+        'FIREBASE_PROJECT_ID',
+        'FIREBASE_STORAGE_BUCKET',
+        'FIREBASE_MESSAGING_SENDER_ID',
+        'FIREBASE_APP_ID',
+        'FIREBASE_MEASUREMENT_ID'
+    ];
+    
+    console.log('\nEnvironment Variables Check:');
+    let hasAllVars = true;
+    envVars.forEach(varName => {
+        const value = process.env[varName];
+        const status = value ? 'SET' : 'NOT SET';
+        console.log(`${varName}: ${status}`);
+        if (!value) hasAllVars = false;
+    });
+    
+    if (!hasAllVars) {
+        console.warn('\n⚠️  WARNING: Some Firebase environment variables are not set!');
+        console.warn('This is expected for local development, but required for production deployment.');
+        console.warn('Make sure GitHub repository secrets are configured for production builds.');
+    } else {
+        console.log('\n✅ All Firebase environment variables are set!');
+    }
+    
     // Create dist directory
     await fs.mkdir('dist', { recursive: true });
     
@@ -39,6 +67,12 @@ async function build() {
         window.FIREBASE_MESSAGING_SENDER_ID = '${process.env.FIREBASE_MESSAGING_SENDER_ID || ''}';
         window.FIREBASE_APP_ID = '${process.env.FIREBASE_APP_ID || ''}';
         window.FIREBASE_MEASUREMENT_ID = '${process.env.FIREBASE_MEASUREMENT_ID || ''}';
+        
+        // Debug logging for environment variable injection
+        console.log('Build-time environment variable injection:');
+        console.log('API Key:', window.FIREBASE_API_KEY ? 'INJECTED' : 'EMPTY');
+        console.log('Project ID:', window.FIREBASE_PROJECT_ID ? 'INJECTED' : 'EMPTY'); 
+        console.log('App ID:', window.FIREBASE_APP_ID ? 'INJECTED' : 'EMPTY');
     </script>
 </head>`;
     

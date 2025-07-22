@@ -69,6 +69,14 @@ class DailyTaskLogger {
         document.getElementById('taskForm').addEventListener('submit', (e) => this.handleTaskSubmit(e));
         document.getElementById('editTaskForm').addEventListener('submit', (e) => this.handleEditSubmit(e));
 
+        // Time calculation for main form
+        document.getElementById('startTime').addEventListener('change', () => this.calculateTimeSpent());
+        document.getElementById('endTime').addEventListener('change', () => this.calculateTimeSpent());
+        
+        // Time calculation for edit form
+        document.getElementById('editStartTime').addEventListener('change', () => this.calculateEditTimeSpent());
+        document.getElementById('editEndTime').addEventListener('change', () => this.calculateEditTimeSpent());
+
         // Search and filters
         document.getElementById('searchInput').addEventListener('input', (e) => this.handleSearch(e.target.value));
         document.getElementById('filterCategory').addEventListener('change', (e) => this.applyFilters());
@@ -104,24 +112,50 @@ class DailyTaskLogger {
             return;
         }
 
+        // Check if Firebase is initialized
+        if (!db) {
+            this.showMessage('Firebase not configured. This application requires Firebase setup for production use.', 'error');
+            return;
+        }
+
         try {
             this.showLoading(true);
+            
+            console.log('Attempting login for username:', username);
             
             // Check if user exists in users collection
             const usersQuery = query(
                 collection(db, 'users'), 
-                where('username', '==', username),
-                where('password', '==', password)
+                where('username', '==', username)
             );
+            
+            console.log('Querying users collection...');
             const userSnapshot = await getDocs(usersQuery);
+            console.log('Query completed. Empty:', userSnapshot.empty);
             
             if (userSnapshot.empty) {
-                this.showMessage('Invalid username or password', 'error');
+                console.log('No user found with username:', username);
+                this.showMessage('User not found. Please check your username.', 'error');
                 return;
             }
 
-            // For simplicity, we'll use a fake email format for Firebase Auth
-            const fakeEmail = `${username}@dailytasks.local`;
+            // Validate password
+            let validUser = null;
+            userSnapshot.forEach((doc) => {
+                const userData = doc.data();
+                console.log('Found user data:', userData);
+                if (userData.password === password) {
+                    validUser = userData;
+                    console.log('Password validated successfully');
+                } else {
+                    console.log('Password mismatch');
+                }
+            });
+
+            if (!validUser) {
+                this.showMessage('Invalid password. Please try again.', 'error');
+                return;
+            }
             
             // Store current user info
             this.currentUser = username;
@@ -139,7 +173,11 @@ class DailyTaskLogger {
             
         } catch (error) {
             console.error('Login error:', error);
-            this.showMessage('Login failed. Please try again.', 'error');
+            if (error.message.includes('Firebase not initialized')) {
+                this.showMessage('Firebase configuration required. Please set up Firebase for production deployment.', 'error');
+            } else {
+                this.showMessage(`Login failed: ${error.message}`, 'error');
+            }
         } finally {
             this.showLoading(false);
         }
@@ -193,6 +231,8 @@ class DailyTaskLogger {
             category: document.getElementById('taskCategory').value,
             priority: document.getElementById('taskPriority').value,
             timeSpent: parseFloat(document.getElementById('timeSpentInput').value),
+            startTime: document.getElementById('startTime').value || null,
+            endTime: document.getElementById('endTime').value || null,
             description: document.getElementById('taskDescription').value,
             status: document.getElementById('taskStatus').value,
             date: document.getElementById('taskDate').value,
@@ -295,7 +335,7 @@ class DailyTaskLogger {
                 <div class="task-footer">
                     <div class="task-time">
                         <i class="fas fa-clock"></i>
-                        <span>${task.timeSpent}h • ${date}</span>
+                        <span>${task.timeSpent}h • ${date}${task.startTime && task.endTime ? ` • ${task.startTime} - ${task.endTime}` : ''}</span>
                     </div>
                     <div class="task-actions">
                         <button class="btn btn-small btn-edit" onclick="app.editTask('${task.id}')">
@@ -328,6 +368,8 @@ class DailyTaskLogger {
         document.getElementById('editTaskDescription').value = task.description || '';
         document.getElementById('editTaskPriority').value = task.priority;
         document.getElementById('editTimeSpent').value = task.timeSpent;
+        document.getElementById('editStartTime').value = task.startTime || '';
+        document.getElementById('editEndTime').value = task.endTime || '';
         document.getElementById('editTaskStatus').value = task.status;
 
         this.openModal();
@@ -348,6 +390,8 @@ class DailyTaskLogger {
             description: document.getElementById('editTaskDescription').value,
             priority: document.getElementById('editTaskPriority').value,
             timeSpent: parseFloat(document.getElementById('editTimeSpent').value),
+            startTime: document.getElementById('editStartTime').value || null,
+            endTime: document.getElementById('editEndTime').value || null,
             status: document.getElementById('editTaskStatus').value,
             updatedAt: new Date().toISOString()
         };
@@ -538,9 +582,22 @@ class DailyTaskLogger {
             <span>${message}</span>
         `;
 
-        // Insert at the top of the container
-        const container = document.querySelector('.container');
-        container.insertBefore(messageDiv, container.firstChild);
+        // Insert at the top of the appropriate container
+        // Use login container if login is visible, otherwise use app container
+        const loginContainer = document.getElementById('loginContainer');
+        const appContainer = document.querySelector('.container');
+        
+        let targetContainer;
+        if (loginContainer && loginContainer.style.display !== 'none') {
+            targetContainer = loginContainer;
+        } else if (appContainer) {
+            targetContainer = appContainer;
+        } else {
+            // Fallback to body if neither container is found
+            targetContainer = document.body;
+        }
+        
+        targetContainer.insertBefore(messageDiv, targetContainer.firstChild);
 
         // Auto-remove after 5 seconds
         setTimeout(() => {
@@ -577,6 +634,38 @@ class DailyTaskLogger {
             const preferences = JSON.parse(savedPrefs);
             if (preferences.view) {
                 this.toggleView(preferences.view);
+            }
+        }
+    }
+
+    calculateTimeSpent() {
+        const startTime = document.getElementById('startTime').value;
+        const endTime = document.getElementById('endTime').value;
+        
+        if (startTime && endTime) {
+            const start = new Date(`2000-01-01T${startTime}:00`);
+            const end = new Date(`2000-01-01T${endTime}:00`);
+            
+            if (end > start) {
+                const diffMs = end - start;
+                const diffHours = diffMs / (1000 * 60 * 60);
+                document.getElementById('timeSpentInput').value = diffHours.toFixed(1);
+            }
+        }
+    }
+
+    calculateEditTimeSpent() {
+        const startTime = document.getElementById('editStartTime').value;
+        const endTime = document.getElementById('editEndTime').value;
+        
+        if (startTime && endTime) {
+            const start = new Date(`2000-01-01T${startTime}:00`);
+            const end = new Date(`2000-01-01T${endTime}:00`);
+            
+            if (end > start) {
+                const diffMs = end - start;
+                const diffHours = diffMs / (1000 * 60 * 60);
+                document.getElementById('editTimeSpent').value = diffHours.toFixed(1);
             }
         }
     }

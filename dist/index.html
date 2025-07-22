@@ -16,6 +16,12 @@
         window.FIREBASE_MESSAGING_SENDER_ID = '';
         window.FIREBASE_APP_ID = '';
         window.FIREBASE_MEASUREMENT_ID = '';
+        
+        // Debug logging for environment variable injection
+        console.log('Build-time environment variable injection:');
+        console.log('API Key:', window.FIREBASE_API_KEY ? 'INJECTED' : 'EMPTY');
+        console.log('Project ID:', window.FIREBASE_PROJECT_ID ? 'INJECTED' : 'EMPTY'); 
+        console.log('App ID:', window.FIREBASE_APP_ID ? 'INJECTED' : 'EMPTY');
     </script>
 </head>
 <body>
@@ -134,6 +140,17 @@
                         <div class="form-group">
                             <label for="timeSpentInput">Time Spent (hours)</label>
                             <input type="number" id="timeSpentInput" min="0.1" step="0.1" placeholder="2.5" required>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="startTime">Start Time</label>
+                            <input type="time" id="startTime" placeholder="e.g., 09:00">
+                        </div>
+                        <div class="form-group">
+                            <label for="endTime">End Time</label>
+                            <input type="time" id="endTime" placeholder="e.g., 17:00">
                         </div>
                     </div>
 
@@ -264,6 +281,16 @@
                     <div class="form-group">
                         <label for="editTimeSpent">Time Spent (hours)</label>
                         <input type="number" id="editTimeSpent" min="0.1" step="0.1">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="editStartTime">Start Time</label>
+                        <input type="time" id="editStartTime">
+                    </div>
+                    <div class="form-group">
+                        <label for="editEndTime">End Time</label>
+                        <input type="time" id="editEndTime">
                     </div>
                 </div>
                 <div class="form-group">

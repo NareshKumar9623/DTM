@@ -27,11 +27,14 @@ const firebaseConfig = {
 };
 
 // Debug: Log which environment variables are available
+console.log('=== Firebase Configuration Debug ===');
+console.log('Current hostname:', window.location.hostname);
 console.log('Environment variables check:');
-console.log('FIREBASE_API_KEY:', window.FIREBASE_API_KEY ? 'SET' : 'NOT SET');
+console.log('FIREBASE_API_KEY:', window.FIREBASE_API_KEY ? 'SET (' + window.FIREBASE_API_KEY.substring(0, 10) + '...)' : 'NOT SET');
 console.log('FIREBASE_AUTH_DOMAIN:', window.FIREBASE_AUTH_DOMAIN ? 'SET' : 'NOT SET');
 console.log('FIREBASE_PROJECT_ID:', window.FIREBASE_PROJECT_ID ? 'SET' : 'NOT SET');
-console.log('FIREBASE_APP_ID:', window.FIREBASE_APP_ID ? 'SET' : 'NOT SET');
+console.log('FIREBASE_APP_ID:', window.FIREBASE_APP_ID ? 'SET (' + window.FIREBASE_APP_ID.substring(0, 15) + '...)' : 'NOT SET');
+
 console.log('Firebase config object:', {
     hasApiKey: !!firebaseConfig.apiKey,
     hasProjectId: !!firebaseConfig.projectId,
