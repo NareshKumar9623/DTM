@@ -45,6 +45,18 @@ Add these secrets to your GitHub repository (Settings > Secrets and variables > 
 - `FIREBASE_APP_ID`
 - `FIREBASE_MEASUREMENT_ID`
 
+### Local Development
+
+For local development without Firebase credentials:
+1. Clone the repository
+2. Open `index.html` in your browser
+3. You'll see a message that Firebase is not configured
+4. The login functionality will not work until Firebase is properly set up
+
+### Production Deployment
+
+The application will work fully when deployed to GitHub Pages with proper Firebase environment variables configured.
+
 ## Users Collection Structure
 
 Create users in the `users` collection with the following structure:

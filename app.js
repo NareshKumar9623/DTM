@@ -112,6 +112,12 @@ class DailyTaskLogger {
             return;
         }
 
+        // Check if Firebase is initialized
+        if (!db) {
+            this.showMessage('Firebase not configured. This application requires Firebase setup for production use.', 'error');
+            return;
+        }
+
         try {
             this.showLoading(true);
             
@@ -167,7 +173,11 @@ class DailyTaskLogger {
             
         } catch (error) {
             console.error('Login error:', error);
-            this.showMessage(`Login failed: ${error.message}`, 'error');
+            if (error.message.includes('Firebase not initialized')) {
+                this.showMessage('Firebase configuration required. Please set up Firebase for production deployment.', 'error');
+            } else {
+                this.showMessage(`Login failed: ${error.message}`, 'error');
+            }
         } finally {
             this.showLoading(false);
         }

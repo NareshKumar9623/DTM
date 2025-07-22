@@ -29,29 +29,114 @@ const firebaseConfig = {
 // Initialize Firebase
 let db, analytics;
 
-try {
-    // Initialize Firebase
-    const app = initializeApp(firebaseConfig);
-    db = getFirestore(app);
-    analytics = getAnalytics(app);
-    console.log('Firebase initialized successfully');
-} catch (error) {
-    console.error('Firebase initialization failed:', error);
-    throw new Error('Firebase configuration is required for production deployment');
+// Check if we have valid Firebase config
+const hasValidConfig = firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.appId;
+
+if (hasValidConfig) {
+    try {
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        db = getFirestore(app);
+        analytics = getAnalytics(app);
+        console.log('Firebase initialized successfully');
+    } catch (error) {
+        console.error('Firebase initialization failed:', error);
+        throw new Error('Firebase configuration is invalid. Please check your environment variables.');
+    }
+} else {
+    // For local development without Firebase config
+    console.warn('Firebase configuration not found. This is expected for local development.');
+    console.warn('For production deployment, make sure to set Firebase environment variables.');
+    
+    // Create a simple alert for users
+    if (typeof window !== 'undefined') {
+        setTimeout(() => {
+            alert('This application requires Firebase configuration for production use. Please set up Firebase credentials for full functionality.');
+        }, 1000);
+    }
+    
+    // Create minimal db object to prevent errors
+    db = null;
+    analytics = null;
 }
 
-// Export the Firebase functions directly
+// Firebase function wrappers that handle missing configuration
+const collection = function(db, path) {
+    if (!db) {
+        throw new Error('Firebase not initialized. Please configure Firebase for production deployment.');
+    }
+    return firebaseCollection(db, path);
+};
+
+const addDoc = async function(collectionRef, data) {
+    if (!db) {
+        throw new Error('Firebase not initialized. Please configure Firebase for production deployment.');
+    }
+    return firebaseAddDoc(collectionRef, data);
+};
+
+const getDocs = async function(queryRef) {
+    if (!db) {
+        throw new Error('Firebase not initialized. Please configure Firebase for production deployment.');
+    }
+    return firebaseGetDocs(queryRef);
+};
+
+const doc = function(database, path, id) {
+    if (!database) {
+        throw new Error('Firebase not initialized. Please configure Firebase for production deployment.');
+    }
+    return firebaseDoc(database, path, id);
+};
+
+const updateDoc = async function(docRef, data) {
+    if (!db) {
+        throw new Error('Firebase not initialized. Please configure Firebase for production deployment.');
+    }
+    return firebaseUpdateDoc(docRef, data);
+};
+
+const deleteDoc = async function(docRef) {
+    if (!db) {
+        throw new Error('Firebase not initialized. Please configure Firebase for production deployment.');
+    }
+    return firebaseDeleteDoc(docRef);
+};
+
+const query = function(collectionRef, ...constraints) {
+    if (!db) {
+        throw new Error('Firebase not initialized. Please configure Firebase for production deployment.');
+    }
+    return firebaseQuery(collectionRef, ...constraints);
+};
+
+const orderBy = function(field, direction = 'asc') {
+    return firebaseOrderBy(field, direction);
+};
+
+const where = function(field, operator, value) {
+    return firebaseWhere(field, operator, value);
+};
+
+const onSnapshot = function(queryRef, callback) {
+    if (!db) {
+        throw new Error('Firebase not initialized. Please configure Firebase for production deployment.');
+    }
+    return firebaseOnSnapshot(queryRef, callback);
+};
+
+// Export the Firebase functions
 export { 
     db, 
     analytics, 
-    firebaseCollection as collection, 
-    firebaseAddDoc as addDoc, 
-    firebaseGetDocs as getDocs, 
-    firebaseDoc as doc, 
-    firebaseUpdateDoc as updateDoc, 
-    firebaseDeleteDoc as deleteDoc, 
-    firebaseQuery as query, 
-    firebaseOrderBy as orderBy, 
-    firebaseWhere as where, 
-    firebaseOnSnapshot as onSnapshot
+    collection, 
+    addDoc, 
+    getDocs, 
+    doc, 
+    updateDoc, 
+    deleteDoc, 
+    query, 
+    orderBy, 
+    where, 
+    onSnapshot
 };
