@@ -115,15 +115,21 @@ class DailyTaskLogger {
         try {
             this.showLoading(true);
             
+            console.log('Attempting login for username:', username);
+            
             // Check if user exists in users collection
             const usersQuery = query(
                 collection(db, 'users'), 
                 where('username', '==', username)
             );
+            
+            console.log('Querying users collection...');
             const userSnapshot = await getDocs(usersQuery);
+            console.log('Query completed. Empty:', userSnapshot.empty);
             
             if (userSnapshot.empty) {
-                this.showMessage('Invalid username or password', 'error');
+                console.log('No user found with username:', username);
+                this.showMessage('User not found. Please check your username.', 'error');
                 return;
             }
 
@@ -131,13 +137,17 @@ class DailyTaskLogger {
             let validUser = null;
             userSnapshot.forEach((doc) => {
                 const userData = doc.data();
+                console.log('Found user data:', userData);
                 if (userData.password === password) {
                     validUser = userData;
+                    console.log('Password validated successfully');
+                } else {
+                    console.log('Password mismatch');
                 }
             });
 
             if (!validUser) {
-                this.showMessage('Invalid username or password', 'error');
+                this.showMessage('Invalid password. Please try again.', 'error');
                 return;
             }
             
@@ -157,7 +167,7 @@ class DailyTaskLogger {
             
         } catch (error) {
             console.error('Login error:', error);
-            this.showMessage('Login failed. Please try again.', 'error');
+            this.showMessage(`Login failed: ${error.message}`, 'error');
         } finally {
             this.showLoading(false);
         }
@@ -562,9 +572,22 @@ class DailyTaskLogger {
             <span>${message}</span>
         `;
 
-        // Insert at the top of the container
-        const container = document.querySelector('.container');
-        container.insertBefore(messageDiv, container.firstChild);
+        // Insert at the top of the appropriate container
+        // Use login container if login is visible, otherwise use app container
+        const loginContainer = document.getElementById('loginContainer');
+        const appContainer = document.querySelector('.container');
+        
+        let targetContainer;
+        if (loginContainer && loginContainer.style.display !== 'none') {
+            targetContainer = loginContainer;
+        } else if (appContainer) {
+            targetContainer = appContainer;
+        } else {
+            // Fallback to body if neither container is found
+            targetContainer = document.body;
+        }
+        
+        targetContainer.insertBefore(messageDiv, targetContainer.firstChild);
 
         // Auto-remove after 5 seconds
         setTimeout(() => {

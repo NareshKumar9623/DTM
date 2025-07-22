@@ -13,7 +13,7 @@ A modern, responsive web application for tracking daily tasks with Firebase back
 
 ## Live Demo
 
-[View Live Application](https://your-username.github.io/DailyLogs)
+[View Live Application](https://nareshkumar9623.github.io/DTM)
 
 ## Technologies Used
 
@@ -23,15 +23,40 @@ A modern, responsive web application for tracking daily tasks with Firebase back
 - **Icons**: Font Awesome
 - **Deployment**: GitHub Pages
 
-## Local Development
+## Firebase Setup
 
-This application uses mock data for development to keep Firebase credentials secure.
+Before deploying, you need to:
 
-1. Clone the repository
-2. Open `index.html` in your browser
-3. Use default credentials:
-   - Username: `demo`
-   - Password: `demo123`
+1. Create a Firebase project at [Firebase Console](https://console.firebase.google.com)
+2. Enable Firestore Database
+3. Set up the following collections in Firestore:
+   - `users` - for storing user credentials
+   - `data/{username}/tasks` - for storing user-specific tasks
+
+### Required Environment Variables
+
+Add these secrets to your GitHub repository (Settings > Secrets and variables > Actions):
+
+- `FIREBASE_API_KEY`
+- `FIREBASE_AUTH_DOMAIN`
+- `FIREBASE_PROJECT_ID`
+- `FIREBASE_STORAGE_BUCKET`
+- `FIREBASE_MESSAGING_SENDER_ID`
+- `FIREBASE_APP_ID`
+- `FIREBASE_MEASUREMENT_ID`
+
+## Users Collection Structure
+
+Create users in the `users` collection with the following structure:
+```json
+{
+  "username": "your_username",
+  "password": "your_password",
+  "email": "user@example.com",
+  "fullName": "Full Name",
+  "createdAt": "2025-01-01T00:00:00.000Z"
+}
+```
 
 ## Deployment
 
@@ -41,7 +66,6 @@ The application is automatically deployed to GitHub Pages using GitHub Actions w
 
 - All Firebase configuration is handled through environment variables
 - API keys are never exposed in the repository
-- Mock data is used for development environment
 - Production deployment uses secure environment variable injection
 
 ## License
