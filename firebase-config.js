@@ -32,6 +32,12 @@ console.log('FIREBASE_API_KEY:', window.FIREBASE_API_KEY ? 'SET' : 'NOT SET');
 console.log('FIREBASE_AUTH_DOMAIN:', window.FIREBASE_AUTH_DOMAIN ? 'SET' : 'NOT SET');
 console.log('FIREBASE_PROJECT_ID:', window.FIREBASE_PROJECT_ID ? 'SET' : 'NOT SET');
 console.log('FIREBASE_APP_ID:', window.FIREBASE_APP_ID ? 'SET' : 'NOT SET');
+console.log('Firebase config object:', {
+    hasApiKey: !!firebaseConfig.apiKey,
+    hasProjectId: !!firebaseConfig.projectId,
+    hasAppId: !!firebaseConfig.appId,
+    projectId: firebaseConfig.projectId || 'NOT_SET'
+});
 
 // Initialize Firebase
 let db, analytics;
