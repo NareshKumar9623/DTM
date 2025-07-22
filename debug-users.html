@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Authentication Debug Tool</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            max-width: 800px; 
+            margin: 0 auto; 
+            padding: 20px; 
+            background: #f5f5f5; 
+        }
+        .debug-section { 
+            background: white; 
+            padding: 20px; 
+            margin: 20px 0; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
+        }
+        button { 
+            background: #4CAF50; 
+            color: white; 
+            padding: 10px 20px; 
+            border: none; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            margin: 5px; 
+        }
+        button:hover { background: #45a049; }
+        .error { color: #d32f2f; }
+        .success { color: #388e3c; }
+        .warning { color: #f57c00; }
+        pre { 
+            background: #f5f5f5; 
+            padding: 10px; 
+            border-radius: 4px; 
+            overflow-x: auto; 
+            white-space: pre-wrap; 
+        }
+        .user-test {
+            background: #e3f2fd;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+            border-left: 4px solid #2196f3;
+        }
+        input[type="text"], input[type="password"] {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin: 5px;
+            width: 200px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 User Authentication Debug Tool</h1>
+    
+    <div class="debug-section">
+        <h2>Firebase Configuration Status</h2>
+        <div id="firebase-status">Checking...</div>
+        <button onclick="checkFirebaseConfig()">Refresh Firebase Status</button>
+    </div>
+
+    <div class="debug-section">
+        <h2>User Database Analysis</h2>
+        <div id="user-analysis">Not checked yet</div>
+        <button onclick="analyzeUsers()">Analyze User Database</button>
+    </div>
+
+    <div class="debug-section">
+        <h2>Test User Login</h2>
+        <div class="user-test">
+            <h4>Test Login Credentials</h4>
+            <input type="text" id="test-username" placeholder="Username" />
+            <input type="password" id="test-password" placeholder="Password" />
+            <button onclick="testLogin()">Test Login</button>
+            <div id="test-result"></div>
+        </div>
+        
+        <div class="user-test">
+            <h4>Quick Tests for Common Users</h4>
+            <button onclick="testQuickLogin('hari', 'hari')">Test: hari/hari</button>
+            <button onclick="testQuickLogin('admin', 'admin')">Test: admin/admin</button>
+            <button onclick="testQuickLogin('user', 'user')">Test: user/user</button>
+            <button onclick="testQuickLogin('test', 'test')">Test: test/test</button>
+        </div>
+    </div>
+
+    <div class="debug-section">
+        <h2>Debug Output</h2>
+        <pre id="debug-output">Debug information will appear here...</pre>
+        <button onclick="clearDebugOutput()">Clear Output</button>
+    </div>
+
+    <!-- Load Firebase modules -->
+    <script type="module">
+        import { 
+            db, 
+            collection, 
+            getDocs, 
+            query, 
+            where 
+        } from './firebase-config.js';
+
+        // Make these available globally for debugging
+        window.db = db;
+        window.collection = collection;
+        window.getDocs = getDocs;
+        window.query = query;
+        window.where = where;
+
+        // Global variables
+        window.debugOutput = document.getElementById('debug-output');
+        
+        function addToDebugOutput(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            window.debugOutput.textContent += `[${timestamp}] ${message}\n`;
+            window.debugOutput.scrollTop = window.debugOutput.scrollHeight;
+        }
+
+        window.addToDebugOutput = addToDebugOutput;
+
+        // Check Firebase configuration
+        window.checkFirebaseConfig = function() {
+            const statusDiv = document.getElementById('firebase-status');
+            let status = '';
+            
+            if (!window.db) {
+                status = '<div class="error">❌ Firebase not initialized</div>';
+                status += '<div class="warning">This is expected for local development without environment variables.</div>';
+            } else {
+                status = '<div class="success">✅ Firebase initialized successfully</div>';
+            }
+            
+            status += '<h4>Environment Variables:</h4>';
+            const envVars = [
+                'FIREBASE_API_KEY',
+                'FIREBASE_AUTH_DOMAIN', 
+                'FIREBASE_PROJECT_ID',
+                'FIREBASE_STORAGE_BUCKET',
+                'FIREBASE_MESSAGING_SENDER_ID',
+                'FIREBASE_APP_ID',
+                'FIREBASE_MEASUREMENT_ID'
+            ];
+            
+            envVars.forEach(varName => {
+                const value = window[varName];
+                const status_class = value ? 'success' : 'error';
+                const status_icon = value ? '✅' : '❌';
+                status += `<div class="${status_class}">${status_icon} ${varName}: ${value ? 'SET' : 'NOT SET'}</div>`;
+            });
+            
+            statusDiv.innerHTML = status;
+            addToDebugOutput('Firebase configuration checked');
+        };
+
+        // Analyze users in database
+        window.analyzeUsers = async function() {
+            const analysisDiv = document.getElementById('user-analysis');
+            
+            if (!window.db) {
+                analysisDiv.innerHTML = '<div class="error">❌ Cannot analyze users: Firebase not initialized</div>';
+                addToDebugOutput('Cannot analyze users: Firebase not initialized');
+                return;
+            }
+
+            try {
+                addToDebugOutput('Starting user database analysis...');
+                const usersCollection = collection(window.db, 'users');
+                const allUsersSnapshot = await getDocs(usersCollection);
+                
+                let analysis = `<div class="success">✅ Found ${allUsersSnapshot.size} users in database</div>`;
+                analysis += '<h4>User Details:</h4>';
+                
+                if (allUsersSnapshot.size === 0) {
+                    analysis += '<div class="warning">⚠️ No users found in the database. You need to create users first.</div>';
+                    analysis += '<h4>Expected User Structure:</h4>';
+                    analysis += '<pre>{\n  "username": "hari",\n  "password": "hari",\n  "email": "hari@example.com",\n  "fullName": "Hari",\n  "createdAt": "2025-01-01T00:00:00.000Z"\n}</pre>';
+                } else {
+                    allUsersSnapshot.forEach((doc, index) => {
+                        const userData = doc.data();
+                        const username = userData.username ? userData.username.toString().trim() : 'undefined';
+                        const hasPassword = !!userData.password;
+                        const passwordLength = userData.password ? userData.password.toString().length : 0;
+                        
+                        analysis += `<div style="border: 1px solid #ddd; padding: 10px; margin: 10px 0;">`;
+                        analysis += `<strong>User ${index + 1} (ID: ${doc.id})</strong><br>`;
+                        analysis += `Username: "${username}" (${typeof userData.username})<br>`;
+                        analysis += `Password: ${hasPassword ? '✅ Set' : '❌ Missing'} (${passwordLength} chars)<br>`;
+                        analysis += `Email: ${userData.email || 'Not set'}<br>`;
+                        analysis += `Full Name: ${userData.fullName || 'Not set'}<br>`;
+                        analysis += `All fields: ${Object.keys(userData).join(', ')}<br>`;
+                        analysis += `</div>`;
+                    });
+                }
+                
+                analysisDiv.innerHTML = analysis;
+                addToDebugOutput(`User database analysis completed. Found ${allUsersSnapshot.size} users.`);
+                
+            } catch (error) {
+                analysisDiv.innerHTML = `<div class="error">❌ Error analyzing users: ${error.message}</div>`;
+                addToDebugOutput(`Error analyzing users: ${error.message}`);
+            }
+        };
+
+        // Test login function
+        window.testLogin = async function() {
+            const username = document.getElementById('test-username').value.trim().toLowerCase();
+            const password = document.getElementById('test-password').value.trim();
+            const resultDiv = document.getElementById('test-result');
+            
+            if (!username || !password) {
+                resultDiv.innerHTML = '<div class="error">Please enter both username and password</div>';
+                return;
+            }
+
+            if (!window.db) {
+                resultDiv.innerHTML = '<div class="error">❌ Firebase not initialized</div>';
+                addToDebugOutput(`Login test failed: Firebase not initialized`);
+                return;
+            }
+
+            try {
+                addToDebugOutput(`Testing login for username: "${username}"`);
+                
+                const usersCollection = collection(window.db, 'users');
+                const allUsersSnapshot = await getDocs(usersCollection);
+                
+                let foundUser = false;
+                let passwordMatch = false;
+                
+                allUsersSnapshot.forEach((doc) => {
+                    const userData = doc.data();
+                    const storedUsername = userData.username ? userData.username.toString().trim().toLowerCase() : '';
+                    const storedPassword = userData.password ? userData.password.toString().trim() : '';
+                    
+                    if (storedUsername === username) {
+                        foundUser = true;
+                        if (storedPassword === password) {
+                            passwordMatch = true;
+                        }
+                        addToDebugOutput(`Found user "${username}", password match: ${passwordMatch}`);
+                    }
+                });
+
+                if (!foundUser) {
+                    resultDiv.innerHTML = `<div class="error">❌ User "${username}" not found</div>`;
+                    addToDebugOutput(`User "${username}" not found in database`);
+                } else if (!passwordMatch) {
+                    resultDiv.innerHTML = `<div class="error">❌ Invalid password for user "${username}"</div>`;
+                    addToDebugOutput(`Invalid password for user "${username}"`);
+                } else {
+                    resultDiv.innerHTML = `<div class="success">✅ Login successful for user "${username}"</div>`;
+                    addToDebugOutput(`Login successful for user "${username}"`);
+                }
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Error testing login: ${error.message}</div>`;
+                addToDebugOutput(`Error testing login: ${error.message}`);
+            }
+        };
+
+        // Quick test function
+        window.testQuickLogin = function(username, password) {
+            document.getElementById('test-username').value = username;
+            document.getElementById('test-password').value = password;
+            window.testLogin();
+        };
+
+        // Clear debug output
+        window.clearDebugOutput = function() {
+            window.debugOutput.textContent = 'Debug output cleared...\n';
+        };
+
+        // Auto-check Firebase status on load
+        window.checkFirebaseConfig();
+        addToDebugOutput('Debug tool loaded');
+    </script>
+</body>
+</html>

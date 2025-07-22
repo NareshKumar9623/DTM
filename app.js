@@ -104,8 +104,8 @@ class DailyTaskLogger {
 
     async handleLogin(e) {
         e.preventDefault();
-        const username = document.getElementById('username').value.trim();
-        const password = document.getElementById('password').value;
+        const username = document.getElementById('username').value.trim().toLowerCase();
+        const password = document.getElementById('password').value.trim();
 
         if (!username || !password) {
             this.showMessage('Please enter both username and password', 'error');
@@ -122,44 +122,66 @@ class DailyTaskLogger {
             this.showLoading(true);
             
             console.log('Attempting login for username:', username);
+            console.log('Debug: Searching for users in Firebase...');
             
-            // Check if user exists in users collection
-            const usersQuery = query(
-                collection(db, 'users'), 
-                where('username', '==', username)
-            );
+            // Get all users and search with case-insensitive matching
+            const usersCollection = collection(db, 'users');
+            const allUsersSnapshot = await getDocs(usersCollection);
             
-            console.log('Querying users collection...');
-            const userSnapshot = await getDocs(usersQuery);
-            console.log('Query completed. Empty:', userSnapshot.empty);
+            console.log('Total users in collection:', allUsersSnapshot.size);
             
-            if (userSnapshot.empty) {
-                console.log('No user found with username:', username);
-                this.showMessage('User not found. Please check your username.', 'error');
-                return;
-            }
-
-            // Validate password
+            // Find user with case-insensitive username matching
             let validUser = null;
-            userSnapshot.forEach((doc) => {
+            let matchedUsername = null;
+            
+            allUsersSnapshot.forEach((doc) => {
                 const userData = doc.data();
-                console.log('Found user data:', userData);
-                if (userData.password === password) {
-                    validUser = userData;
-                    console.log('Password validated successfully');
-                } else {
-                    console.log('Password mismatch');
+                const storedUsername = userData.username ? userData.username.toString().trim().toLowerCase() : '';
+                const storedPassword = userData.password ? userData.password.toString().trim() : '';
+                
+                console.log('Checking user:', {
+                    id: doc.id,
+                    storedUsername: storedUsername,
+                    inputUsername: username,
+                    usernameMatch: storedUsername === username,
+                    hasPassword: !!storedPassword,
+                    passwordMatch: storedPassword === password
+                });
+                
+                // Case-insensitive username match
+                if (storedUsername === username) {
+                    matchedUsername = userData.username; // Keep original case for display
+                    
+                    // Check password match (case-sensitive but trimmed)
+                    if (storedPassword === password) {
+                        validUser = userData;
+                        console.log('✅ User authenticated successfully');
+                    } else {
+                        console.log('❌ Password mismatch for user:', storedUsername);
+                        console.log('Expected password length:', storedPassword.length);
+                        console.log('Provided password length:', password.length);
+                    }
                 }
             });
 
+            if (!matchedUsername) {
+                console.log('❌ No user found with username:', username);
+                console.log('Available usernames:', allUsersSnapshot.docs.map(doc => 
+                    doc.data().username ? doc.data().username.toString().trim().toLowerCase() : 'undefined'
+                ));
+                this.showMessage(`User '${username}' not found. Please check your username.`, 'error');
+                return;
+            }
+
             if (!validUser) {
+                console.log('❌ Invalid password for user:', matchedUsername);
                 this.showMessage('Invalid password. Please try again.', 'error');
                 return;
             }
             
-            // Store current user info
-            this.currentUser = username;
-            localStorage.setItem('currentUser', username);
+            // Store current user info (use original username case for display)
+            this.currentUser = matchedUsername;
+            localStorage.setItem('currentUser', matchedUsername);
             
             // Show app directly (simplified auth)
             this.showApp();
@@ -169,7 +191,7 @@ class DailyTaskLogger {
             this.updateStats();
             this.loadUserPreferences();
             
-            this.showMessage('Login successful!', 'success');
+            this.showMessage(`Welcome back, ${matchedUsername}!`, 'success');
             
         } catch (error) {
             console.error('Login error:', error);
@@ -180,6 +202,41 @@ class DailyTaskLogger {
             }
         } finally {
             this.showLoading(false);
+        }
+    }
+
+    // Debug helper function to check user data structure
+    async debugUserData() {
+        if (!db) {
+            console.log('Firebase not initialized - cannot debug user data');
+            return;
+        }
+
+        try {
+            console.log('=== USER DATA DEBUG ===');
+            const usersCollection = collection(db, 'users');
+            const allUsersSnapshot = await getDocs(usersCollection);
+            
+            console.log('Total users in collection:', allUsersSnapshot.size);
+            
+            allUsersSnapshot.forEach((doc, index) => {
+                const userData = doc.data();
+                console.log(`User ${index + 1}:`, {
+                    id: doc.id,
+                    username: userData.username,
+                    usernameType: typeof userData.username,
+                    usernameLength: userData.username ? userData.username.length : 0,
+                    hasPassword: !!userData.password,
+                    passwordLength: userData.password ? userData.password.length : 0,
+                    email: userData.email,
+                    fullName: userData.fullName,
+                    createdAt: userData.createdAt,
+                    allFields: Object.keys(userData)
+                });
+            });
+            console.log('=== END DEBUG ===');
+        } catch (error) {
+            console.error('Error debugging user data:', error);
         }
     }
 
@@ -676,3 +733,25 @@ const app = new DailyTaskLogger();
 
 // Make app globally available for onclick handlers
 window.app = app;
+
+// Add global debug function for troubleshooting
+window.debugUsers = async function() {
+    if (app.debugUserData) {
+        await app.debugUserData();
+    } else {
+        console.log('Debug function not available');
+    }
+};
+
+// Add global function to check Firebase status
+window.checkFirebaseStatus = function() {
+    console.log('=== Firebase Status Check ===');
+    console.log('DB initialized:', !!db);
+    console.log('Current user:', app.currentUser);
+    console.log('Hostname:', window.location.hostname);
+    console.log('Environment variables:');
+    console.log('- API Key:', window.FIREBASE_API_KEY ? 'SET' : 'NOT SET');
+    console.log('- Project ID:', window.FIREBASE_PROJECT_ID ? 'SET' : 'NOT SET');
+    console.log('- App ID:', window.FIREBASE_APP_ID ? 'SET' : 'NOT SET');
+    console.log('=== End Status Check ===');
+};

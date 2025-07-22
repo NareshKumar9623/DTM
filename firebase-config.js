@@ -29,6 +29,7 @@ const firebaseConfig = {
 // Debug: Log which environment variables are available
 console.log('=== Firebase Configuration Debug ===');
 console.log('Current hostname:', window.location.hostname);
+console.log('Is Production?', window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1');
 console.log('Environment variables check:');
 console.log('FIREBASE_API_KEY:', window.FIREBASE_API_KEY ? 'SET (' + window.FIREBASE_API_KEY.substring(0, 10) + '...)' : 'NOT SET');
 console.log('FIREBASE_AUTH_DOMAIN:', window.FIREBASE_AUTH_DOMAIN ? 'SET' : 'NOT SET');
