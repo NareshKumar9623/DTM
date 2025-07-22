@@ -26,11 +26,20 @@ const firebaseConfig = {
     measurementId: window.FIREBASE_MEASUREMENT_ID || ""
 };
 
+// Debug: Log which environment variables are available
+console.log('Environment variables check:');
+console.log('FIREBASE_API_KEY:', window.FIREBASE_API_KEY ? 'SET' : 'NOT SET');
+console.log('FIREBASE_AUTH_DOMAIN:', window.FIREBASE_AUTH_DOMAIN ? 'SET' : 'NOT SET');
+console.log('FIREBASE_PROJECT_ID:', window.FIREBASE_PROJECT_ID ? 'SET' : 'NOT SET');
+console.log('FIREBASE_APP_ID:', window.FIREBASE_APP_ID ? 'SET' : 'NOT SET');
+
 // Initialize Firebase
 let db, analytics;
 
 // Check if we have valid Firebase config
 const hasValidConfig = firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.appId;
+
+console.log('Has valid Firebase config:', hasValidConfig);
 
 if (hasValidConfig) {
     try {

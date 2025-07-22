@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase Config Test</title>
+</head>
+<body>
+    <h1>Firebase Configuration Test</h1>
+    <div id="config-status"></div>
+    
+    <script>
+        // This script will be replaced during build with actual environment variables
+        window.FIREBASE_API_KEY = 'test-key';
+        window.FIREBASE_PROJECT_ID = 'test-project';
+        window.FIREBASE_APP_ID = 'test-app';
+        
+        const statusDiv = document.getElementById('config-status');
+        
+        const configStatus = {
+            'API Key': window.FIREBASE_API_KEY || 'NOT SET',
+            'Project ID': window.FIREBASE_PROJECT_ID || 'NOT SET',
+            'App ID': window.FIREBASE_APP_ID || 'NOT SET',
+            'Auth Domain': window.FIREBASE_AUTH_DOMAIN || 'NOT SET',
+            'Storage Bucket': window.FIREBASE_STORAGE_BUCKET || 'NOT SET',
+            'Messaging Sender ID': window.FIREBASE_MESSAGING_SENDER_ID || 'NOT SET',
+            'Measurement ID': window.FIREBASE_MEASUREMENT_ID || 'NOT SET'
+        };
+        
+        let html = '<h2>Firebase Configuration Status:</h2><ul>';
+        for (const [key, value] of Object.entries(configStatus)) {
+            const status = value !== 'NOT SET' ? '✅' : '❌';
+            html += `<li>${status} ${key}: ${value === 'NOT SET' ? 'NOT SET' : 'SET'}</li>`;
+        }
+        html += '</ul>';
+        
+        const hasValidConfig = window.FIREBASE_API_KEY && window.FIREBASE_PROJECT_ID && window.FIREBASE_APP_ID;
+        html += `<h3>Firebase Ready: ${hasValidConfig ? '✅ YES' : '❌ NO'}</h3>`;
+        
+        if (!hasValidConfig) {
+            html += '<p style="color: red;">Missing required Firebase configuration. Make sure environment variables are set in GitHub secrets.</p>';
+        }
+        
+        statusDiv.innerHTML = html;
+        
+        console.log('Firebase Configuration Test:', configStatus);
+        console.log('Firebase Ready:', hasValidConfig);
+    </script>
+</body>
+</html>
