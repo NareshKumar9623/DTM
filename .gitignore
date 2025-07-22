@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Local build output (only GitHub Actions should create dist)
+dist/
+
+# Environment variables (use GitHub secrets instead)
+.env
+.env.local
+.env.production
+
+# IDE files
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Test files
+test-*.html
+test-index.html
+
+# Temporary files
+*.tmp
+*.temp

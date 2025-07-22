@@ -33,6 +33,8 @@ Before deploying, you need to:
    - `users` - for storing user credentials
    - `data/{username}/tasks` - for storing user-specific tasks
 
+**Important**: For detailed deployment instructions and troubleshooting, see [DEPLOYMENT.md](DEPLOYMENT.md)
+
 ### Required Environment Variables
 
 Add these secrets to your GitHub repository (Settings > Secrets and variables > Actions):
